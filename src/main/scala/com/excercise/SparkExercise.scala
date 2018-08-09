@@ -1,64 +1,69 @@
 package com.excercise
 
 import org.apache.log4j.Logger
-import org.apache.spark._
-import org.apache.spark.SparkContext._
-import org.apache.spark.graphx._
-import scala.collection.mutable.ListBuffer
+import org.apache.spark.sql._
+import java.io._
 
 object SparkExercise extends Serializable {
   def main(arg: Array[String]) {
 
-    var log = Logger.getLogger(getClass.getName)
-
-    def parseHouseRecord (line:String)= {
-      val fields = line.split(",")
-      val street = fields(0)
-      val sale_date = fields(8)
-      ((street, sale_date), 1) //reduce count
-    }
-
-    def parseCrimeRecord (line:String):((String, String, String), Int) = {
-      val fields = line.split(",")
-      val cdatetime = fields(0)
-      val address = fields(1)
-      val ucr_ncic_code = fields(6)
-      ((address, cdatetime, ucr_ncic_code), 1)
-    }
-
-    def makeCrimeVert(address :String): Option[(String)] = {
-          return Some(address)
-    }
-
-    def makeEdges(houseRow :(String, String)): List[Edge[String]] = {
-      var edges = new ListBuffer[Edge[String]]()
-      val address = houseRow._1.toString
-      edges += Edge(address, 0, 0)
-    }
+    val log = Logger.getLogger(getClass.getName)
 
     try {
-      val sc = new SparkContext("local[*]", "Exercise1")
-      val linesOfCrimes = sc.textFile("./src/main/resources/exercise1/SacramentocrimeJanuary2006.csv")
-      val crimeRecords = linesOfCrimes.map(parseCrimeRecord).reduceByKey(_ + _)
-      val totalCrime = crimeRecords.count
-      val verts = crimeRecords.flatMap(x => makeCrimeVert(x._1.toString()))
+      val spark = SparkSession
+        .builder()
+        .appName("Exercise1")
+        .config("spark.master", "local[*]")
+        .getOrCreate()
+      val crimeDf = spark.read.format("csv").option("header", "true").load("./src/main/resources/exercise1/SacramentocrimeJanuary2006.csv")
+
+      val uniqueCrime  = crimeDf.drop("district")
+                      .drop("beat")
+                      .drop("grid")
+                      .drop("latitude")
+                      .drop("longitude")
+                      .distinct().cache()
+
+      val hourseDf = spark.read.format("csv").option("header", "true").load("./src/main/resources/exercise1/Sacramentorealestatetransactions.csv")
+      val uniqueHouse  = hourseDf.drop("city")
+                                .drop("zip")
+                                .drop("state")
+                                .drop("beds")
+                                .drop("baths")
+                                .drop("sq__ft")
+                                .drop("type")
+                                .drop("sq__ft")
+                                .drop("latitude")
+                                .drop("longitude")
+                                .filter(hourseDf("sale_date").isNotNull)
+                                .filter(hourseDf("price").cast("int") > 0)
+                                .withColumnRenamed("street" ,"address")
+                                .drop("sale_date")
+                                .drop("price")
+                                .distinct().cache()
 
 
-      log.info(totalCrime)
+      val uniqueCrimeCollect = uniqueCrime.count()
+      val uniqueHouseCollect = uniqueHouse.count()
 
-      val linesOfHouse = sc.textFile("./src/main/resources/exercise1/Sacramentorealestatetransactions.csv")
-      val houseRecords = linesOfHouse.map(parseHouseRecord).reduceByKey(_ + _)
-      val totalHouses = houseRecords.count
+      val crimeWithinHouse = uniqueCrime.join(uniqueHouse, "address").collect()
+      val file = new File("./result1.txt")
+      val bw = new BufferedWriter(new FileWriter(file))
+      bw.write("Total Crime:" + uniqueCrimeCollect.toString + "\n")
+      bw.write("Total House:" + uniqueHouseCollect.toString+ "\n")
+      crimeWithinHouse.foreach(x => {
+        bw.write("Address: " + x.getString(0) + "Date: " + x.getString(1) + "Crime: " + x.getString(2) + "Code: " + x.getString(3)+ "\n")
+      })
 
-      val default = "Nobody"
-
-      log.info(totalHouses)
+      spark.close()
+      bw.close()
     }
     catch {
       case ex: Exception =>
         log.error("General error", ex)
         throw ex
     }
+
   }
 
 }

@@ -1,0 +1,5 @@
+package com.excercise
+
+case class CrimeLog(Activity: String) {
+
+}
