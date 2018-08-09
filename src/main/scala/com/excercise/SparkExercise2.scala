@@ -39,6 +39,8 @@ object SparkExercise2 extends Serializable {
         .drop("Y_Coord")
         .drop("Injury")
         .distinct().cache()
+
+      val total = totalRow.collect().length
       totalRow.unpersist()
 
       val zipcodeMostCrime = totalCrime.groupBy("OccurenceZipCode").max().first() //95834->95662->95670
@@ -50,8 +52,8 @@ object SparkExercise2 extends Serializable {
 
 
       totalCrime.unpersist()
-      val crimeWithinTheYear =  crimeWithDateCast.filter(x => {x.getDate(1).getYear == 2018 })
-                                                  .filter(x => {x.getDate(2).getYear == 2018 }).count()
+      val crimeWithinTheYear =  crimeWithDateCast.filter(_.getDate(1).getYear  == 108)
+                                                  .filter(_.getDate(2).getYear  == 108).count()
 
       val crimeWithMonthCast = crimeWithDateCast.withColumn("Month", from_unixtime(unix_timestamp(crimeWithDateCast("OccurenceStartDate"), "dd/MM/yy hh:mm"), "MM")).cache()
       crimeWithDateCast.unpersist()
@@ -62,10 +64,10 @@ object SparkExercise2 extends Serializable {
 
       val file = new File("./result2.txt")
       val bw = new BufferedWriter(new FileWriter(file))
-      bw.write("MostCrime ZipCode:" + zipcodeMostCrime.toString + "\n")
-      bw.write("MostCrime commit ZipCode:" + zipcodeMostCrimeCommit.toString+ "\n")
-      bw.write("Crime happen this year:" + crimeWithinTheYear.toString+ "\n")
-      bw.write("Month Of Crime:" + monthOfMaxCrime.toString+ "\n")
+      bw.write("MostCrime ZipCode: " + zipcodeMostCrime.toString + "\n")
+      bw.write("MostCrime commit ZipCode: " + zipcodeMostCrimeCommit.toString+ "\n")
+      bw.write("Crimes happen this year: " + crimeWithinTheYear.toString+ "\n")
+      bw.write("Month Of Crime: " + monthOfMaxCrime.toString+ "\n")
       bw.close()
     }
     catch {
